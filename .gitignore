@@ -1,0 +1,21 @@
+# Node dependencies
+node_modules/
+frontend/node_modules/
+
+# Hardhat build outputs
+artifacts/
+cache/
+
+# Frontend build output
+dist/
+frontend/dist/
+
+# Environment variables
+.env
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
