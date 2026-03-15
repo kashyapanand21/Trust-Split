@@ -1,28 +1,15 @@
-# Normalize line endings automatically
 * text=auto eol=lf
-
-# Solidity
-*.sol text eol=lf
 
 # JavaScript / React
 *.js text eol=lf
 *.jsx text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
 
-# JSON
-*.json text eol=lf
-
-# CSS
+# Styles
 *.css text eol=lf
+*.scss text eol=lf
 
-# HTML
-*.html text eol=lf
-
-# Markdown
+# Config files
+*.json text eol=lf
 *.md text eol=lf
-
-# Binary files
-*.png binary
-*.jpg binary
-*.jpeg binary
-*.gif binary
-*.svg binary

@@ -24,6 +24,18 @@ contract TrustSplit is ReentrancyGuard {
     // Data structures
     // -------------------------------------------------------------------------
 
+    struct Expense {
+        uint256 id;
+        uint256 groupId;
+        address payer;
+        uint256 amount;
+        string description;
+        uint256 timestamp;
+        address[] participants;
+        mapping(address => uint256) shares; // custom amounts per participant
+        bool settled;
+    }
+
     struct Group {
         uint256 id;
         address payer;
@@ -33,6 +45,8 @@ contract TrustSplit is ReentrancyGuard {
         uint256 paidCount;     // number of members who have called payShare
         bool settled;          // true after settleGroup succeeds
         mapping(address => bool) paid; // tracks which members have paid
+        uint256 expenseCount;   // number of expenses in this group
+        mapping(uint256 => Expense) expenses; // expenses in this group
     }
 
     // -------------------------------------------------------------------------
@@ -65,6 +79,20 @@ contract TrustSplit is ReentrancyGuard {
         uint256 indexed groupId,
         address indexed payer,
         uint256 totalReleased
+    );
+
+    event ExpenseAdded(
+        uint256 indexed groupId,
+        uint256 indexed expenseId,
+        address indexed payer,
+        uint256 amount,
+        string description
+    );
+
+    event ExpenseSettled(
+        uint256 indexed groupId,
+        uint256 indexed expenseId,
+        address indexed payer
     );
 
     // -------------------------------------------------------------------------
@@ -251,5 +279,159 @@ contract TrustSplit is ReentrancyGuard {
         returns (bool)
     {
         return groups[groupId].paid[member];
+    }
+
+    /**
+     * @notice Add an expense to a group (off-chain tracking, on-chain record).
+     * @param groupId The group ID.
+     * @param amount The expense amount in wei.
+     * @param description Description of the expense.
+     * @param participants Array of participant addresses who share this expense.
+     * @param shares Array of custom amounts per participant (0 for equal split).
+     * @dev This is a lightweight record-keeping function. Actual settlement happens via settleGroup.
+     */
+    function addExpense(
+        uint256 groupId,
+        uint256 amount,
+        string calldata description,
+        address[] calldata participants,
+        uint256[] calldata shares
+    ) external groupExists(groupId) {
+        Group storage g = groups[groupId];
+        require(!g.settled, "TrustSplit: group already settled");
+        
+        // Verify caller is payer or member
+        require(
+            msg.sender == g.payer || _isMember(g.members, msg.sender),
+            "TrustSplit: not authorized to add expense"
+        );
+
+        require(amount > 0, "TrustSplit: expense amount must be > 0");
+        require(participants.length > 0, "TrustSplit: need at least one participant");
+        require(participants.length == shares.length, "TrustSplit: participants and shares length mismatch");
+
+        uint256 expenseId = g.expenseCount++;
+        Expense storage exp = g.expenses[expenseId];
+        
+        exp.id = expenseId;
+        exp.groupId = groupId;
+        exp.payer = msg.sender;
+        exp.amount = amount;
+        exp.description = description;
+        exp.timestamp = block.timestamp;
+        exp.participants = participants;
+        exp.settled = false;
+
+        // Set custom shares if provided, otherwise will be calculated off-chain
+        for (uint256 i = 0; i < participants.length; i++) {
+            require(participants[i] != address(0), "TrustSplit: zero address participant");
+            exp.shares[participants[i]] = shares[i];
+        }
+
+        emit ExpenseAdded(groupId, expenseId, msg.sender, amount, description);
+    }
+
+    /**
+     * @notice Internal helper to check if address is a member
+     */
+    function _isMember(address[] memory members, address addr) private pure returns (bool) {
+        for (uint256 i = 0; i < members.length; i++) {
+            if (members[i] == addr) return true;
+        }
+        return false;
+    }
+
+    /**
+     * @notice Record a payment for an expense (off-chain tracking).
+     * @param groupId The group ID.
+     * @param expenseId The expense ID.
+     * @dev This marks an expense as settled. Actual funds are handled via settleGroup.
+     */
+    function recordPayment(uint256 groupId, uint256 expenseId) external groupExists(groupId) {
+        Group storage g = groups[groupId];
+        require(expenseId < g.expenseCount, "TrustSplit: expense does not exist");
+        
+        Expense storage exp = g.expenses[expenseId];
+        require(!exp.settled, "TrustSplit: expense already settled");
+        require(msg.sender == exp.payer || msg.sender == g.payer, "TrustSplit: not authorized");
+
+        exp.settled = true;
+        emit ExpenseSettled(groupId, expenseId, msg.sender);
+    }
+
+    /**
+     * @notice Get expense details.
+     * @param groupId The group ID.
+     * @param expenseId The expense ID.
+     * @return payer The address who paid the expense.
+     * @return amount The expense amount in wei.
+     * @return description The expense description.
+     * @return timestamp When the expense was added.
+     * @return participants Array of participant addresses.
+     * @return settled Whether the expense is settled.
+     */
+    function getExpense(uint256 groupId, uint256 expenseId)
+        external
+        view
+        groupExists(groupId)
+        returns (
+            address payer,
+            uint256 amount,
+            string memory description,
+            uint256 timestamp,
+            address[] memory participants,
+            bool settled
+        )
+    {
+        Group storage g = groups[groupId];
+        require(expenseId < g.expenseCount, "TrustSplit: expense does not exist");
+        
+        Expense storage exp = g.expenses[expenseId];
+        return (
+            exp.payer,
+            exp.amount,
+            exp.description,
+            exp.timestamp,
+            exp.participants,
+            exp.settled
+        );
+    }
+
+    /**
+     * @notice Get all expense IDs for a group.
+     * @param groupId The group ID.
+     * @return expenseIds Array of expense IDs.
+     */
+    function getGroupExpenses(uint256 groupId)
+        external
+        view
+        groupExists(groupId)
+        returns (uint256[] memory expenseIds)
+    {
+        Group storage g = groups[groupId];
+        uint256 count = g.expenseCount;
+        expenseIds = new uint256[](count);
+        for (uint256 i = 0; i < count; i++) {
+            expenseIds[i] = i;
+        }
+        return expenseIds;
+    }
+
+    /**
+     * @notice Get the share amount for a participant in an expense.
+     * @param groupId The group ID.
+     * @param expenseId The expense ID.
+     * @param participant The participant address.
+     * @return share The share amount in wei (0 if equal split, custom amount otherwise).
+     */
+    function getExpenseShare(uint256 groupId, uint256 expenseId, address participant)
+        external
+        view
+        groupExists(groupId)
+        returns (uint256 share)
+    {
+        Group storage g = groups[groupId];
+        require(expenseId < g.expenseCount, "TrustSplit: expense does not exist");
+        return g.expenses[expenseId].shares[participant];
     }
 }

@@ -10,6 +10,10 @@ const CONTRACT_ADDRESS =
  * @param {ethers.Signer | ethers.Provider} providerOrSigner
  */
 export function getContract(providerOrSigner) {
+  if (!CONTRACT_ADDRESS) {
+    console.error("TrustSplit contract address missing. Please deploy the contract.");
+    return null;
+  }
   return new ethers.Contract(CONTRACT_ADDRESS, TrustSplitABI, providerOrSigner);
 }
 

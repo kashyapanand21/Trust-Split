@@ -1,140 +1,68 @@
-import { useState, useEffect, useCallback } from "react";
-import { ethers } from "ethers";
 import { Link } from "react-router-dom";
-import { useWallet } from "../context/WalletContext";
-import { getContract } from "../utils/contract";
+import { useAppContext } from "../context/AppContext";
 import GroupCard from "../components/GroupCard";
 
 export default function Dashboard() {
-  const { account, provider } = useWallet();
+  const { currentUser, groups } = useAppContext();
 
-  const [groups, setGroups]   = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState("");
+  const safeGroups = groups || [];
 
-  // ── Fetch ─────────────────────────────────────────────────────────────────
-  const loadGroups = useCallback(async () => {
-    if (!account || !provider) return;
-    setLoading(true);
-    setError("");
+  // Filter groups where current user is a member
+  const myGroups = safeGroups.filter(g => 
+    g?.members?.some(m => m.id === currentUser?.id)
+  ).sort((a, b) => {
+    const dateA = a.createdAt ? new Date(a.createdAt) : 0;
+    const dateB = b.createdAt ? new Date(b.createdAt) : 0;
+    return dateB - dateA;
+  });
 
-    try {
-      const contract = getContract(provider);
-      const groupIds = await contract.getUserGroups(account);
-
-      const fetched = await Promise.all(
-        groupIds.map(async (id) => {
-          const [payer, members, totalAmount, shareAmount, paidCount, settled] =
-            await contract.getGroup(id);
-          return {
-            id:         Number(id),
-            payer,
-            members:    [...members],
-            totalAmount: ethers.formatEther(totalAmount),
-            shareAmount: ethers.formatEther(shareAmount),
-            paidCount:  Number(paidCount),
-            settled,
-          };
-        })
-      );
-
-      // Most recent groups first
-      setGroups(fetched.reverse());
-    } catch (err) {
-      console.error("loadGroups error:", err);
-      setError("Failed to load groups. Check your connection and try again.");
-    } finally {
-      setLoading(false);
-    }
-  }, [account, provider]);
-
-  useEffect(() => { loadGroups(); }, [loadGroups]);
-
-  if (!account) {
-    return (
-      <div className="text-center py-24 text-gray-500">
-        <p>Connect your wallet to view your groups.</p>
-      </div>
-    );
-  }
-
-  // ── Status counts for summary row ─────────────────────────────────────────
-  const openCount     = groups.filter((g) => !g.settled && g.paidCount < g.members.length).length;
-  const fullyPaidCount = groups.filter((g) => !g.settled && g.paidCount === g.members.length).length;
-  const settledCount  = groups.filter((g) => g.settled).length;
+  // Count by simple status (just for display, no on-chain status anymore)
+  const totalGroups = myGroups.length;
 
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white">My Groups</h1>
+          <h1 className="text-2xl font-bold text-white">My Trips</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Groups where you are the payer or a member
+            Manage your shared expenses and settlements
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={loadGroups}
-            disabled={loading}
-            className="px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-40 transition-colors"
+          <Link
+            to="/join"
+            className="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-800 hover:bg-gray-700 transition-colors"
           >
-            {loading ? "Loading…" : "↺ Refresh"}
-          </button>
+            Join Group
+          </Link>
           <Link
             to="/create"
             className="px-4 py-2 rounded-lg text-sm font-semibold bg-violet-600 hover:bg-violet-500 transition-colors"
           >
-            + New Group
+            + New Trip
           </Link>
         </div>
       </div>
 
-      {/* Status summary badges */}
-      {groups.length > 0 && (
-        <div className="flex gap-2 mb-6 flex-wrap">
-          <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30">
-            {openCount} OPEN
-          </span>
-          <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
-            {fullyPaidCount} FULLY PAID
-          </span>
-          <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-green-500/20 text-green-400 border border-green-500/30">
-            {settledCount} SETTLED
-          </span>
-        </div>
-      )}
-
-      {/* Error */}
-      {error && (
-        <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3 mb-4">
-          {error}
-        </p>
-      )}
-
-      {/* Loading skeleton */}
-      {loading && groups.length === 0 && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {[0, 1].map((i) => (
-            <div key={i} className="rounded-xl border border-gray-800 bg-gray-900 p-5 animate-pulse h-36" />
-          ))}
-        </div>
-      )}
-
       {/* Empty state */}
-      {!loading && groups.length === 0 && !error && (
+      {myGroups.length === 0 ? (
         <div className="text-center py-20 text-gray-600 border border-dashed border-gray-800 rounded-xl">
-          <p className="mb-3">No groups yet.</p>
-          <Link to="/create" className="text-violet-400 hover:underline text-sm">
-            Create your first split →
-          </Link>
+          <p className="mb-3">No trips yet.</p>
+          <div className="flex gap-4 justify-center">
+            <Link to="/create" className="text-violet-400 hover:underline text-sm">
+              Create a new trip
+            </Link>
+            <span className="text-gray-700">or</span>
+            <Link to="/join" className="text-violet-400 hover:underline text-sm">
+              Join an existing one
+            </Link>
+          </div>
         </div>
-      )}
-
-      {/* Group grid */}
-      {groups.length > 0 && (
+      ) : (
+        /* Group grid */
         <div className="grid gap-4 sm:grid-cols-2">
-          {groups.map((g) => (
+          {myGroups.map((g) => (
             <GroupCard key={g.id} group={g} />
           ))}
         </div>

@@ -16,8 +16,8 @@ export default function Home() {
           Split bills.<br />Trust the chain.
         </h1>
         <p className="text-gray-400 text-lg max-w-md mx-auto">
-          TrustSplit lets you pool and split payments on-chain. No intermediaries,
-          no he-said-she-said — just code.
+          TrustSplitz lets you manage group expenses with smart settlement. Track expenses,
+          calculate balances, and settle up on-chain or offline.
         </p>
       </div>
 

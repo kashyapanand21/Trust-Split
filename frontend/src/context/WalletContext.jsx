@@ -107,6 +107,20 @@ export function WalletProvider({ children }) {
     setChainId(null); setWrongNetwork(false);
   }, []);
 
+  // ── signMessage: sign a message for authentication ─────────────────────────
+  const signMessage = useCallback(async (message) => {
+    if (!signer) {
+      throw new Error("Wallet not connected");
+    }
+    try {
+      const signature = await signer.signMessage(message);
+      return signature;
+    } catch (err) {
+      console.error("signMessage error:", err);
+      throw err;
+    }
+  }, [signer]);
+
   return (
     <WalletContext.Provider
       value={{
@@ -119,6 +133,7 @@ export function WalletProvider({ children }) {
         connectWallet,
         switchNetwork,
         disconnect,
+        signMessage,
       }}
     >
       {children}
