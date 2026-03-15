@@ -9,18 +9,27 @@ export function AppProvider({ children }) {
   });
 
   const [groups, setGroups] = useState(() => {
-    const saved = localStorage.getItem("trustsplitz_groups");
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem("trustsplitz_groups");
+      const parsed = saved ? JSON.parse(saved) : [];
+      return Array.isArray(parsed) ? parsed : Object.values(parsed);
+    } catch { return []; }
   });
 
   const [expenses, setExpenses] = useState(() => {
-    const saved = localStorage.getItem("trustsplitz_expenses");
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem("trustsplitz_expenses");
+      const parsed = saved ? JSON.parse(saved) : [];
+      return Array.isArray(parsed) ? parsed : Object.values(parsed);
+    } catch { return []; }
   });
 
   const [transactions, setTransactions] = useState(() => {
-    const saved = localStorage.getItem("trustsplitz_transactions");
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem("trustsplitz_transactions");
+      const parsed = saved ? JSON.parse(saved) : [];
+      return Array.isArray(parsed) ? parsed : Object.values(parsed);
+    } catch { return []; }
   });
 
   useEffect(() => {
@@ -58,6 +67,7 @@ export function AppProvider({ children }) {
       name,
       description,
       members: [currentUser],
+      createdBy: currentUser.id,
       createdAt: new Date().toISOString(),
     };
     setGroups((prev) => [...(prev || []), newGroup]);
